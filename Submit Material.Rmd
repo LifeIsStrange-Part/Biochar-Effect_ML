@@ -1,0 +1,316 @@
+---
+title: "R Biochar Analysis"
+output:
+  html_document:
+    df_print: paged
+---
+```{r message=FALSE, warning=FALSE}
+
+```
+
+
+```{r message=FALSE, warning=FALSE}
+#Library
+library(plotly)
+library(ggplot2)
+library(car)
+library(MVN)
+library(survival)
+library(coin)
+#install.packages("devtools")
+library(devtools)
+#install_github("edwindj/ffbase", subdir="pkg")
+library(ffbase)
+#install_github("mtennekes/tabplot")
+library(tabplot)
+library(corrplot)
+library(ggpubr)
+
+library(randomForestExplainer)
+library(magrittr)
+library(dplyr)
+library(randomForest)
+library(datasets)
+library(caret)
+lib_vect <- c("raster","rpart","PresenceAbsence","AUC","randomForest","ecospat","biomod2","ggplot2","caret","dismo","ncf","tidyr")
+
+sapply(lib_vect,require,character.only=TRUE)
+
+#devtools::install_github("rstudio/tensorflow")
+library(tensorflow)
+
+#Load the necessary libraries
+library(keras)
+library(grid)
+library(forestploter)
+library(caret)
+library(e1071) 
+library(neuralnet)
+ library(dplyr)
+library(nnet)
+library(stats)
+library(Hmisc)
+library(matrixStats)
+```
+
+
+
+```{r}
+SVM_cale <- read.csv("Dataset_biochar_scaled.csv")
+```
+
+
+```{r}
+#Binary RF Model 记得把训练使用的数据库每个分别摘取出来
+set.seed(2095)
+index <- createDataPartition(SVM_cale$category, p=0.75, list=FALSE)
+saveforRF <- index
+
+SVM_cale <- read.csv("Dataset_biochar_scaled.csv")
+SVM_cale$category <- as.factor(SVM_cale$category)
+colnames(SVM_cale)<-c("concentration", "growth_or_not","reproduction_or_not", "survival_or_not","temperature","PAHs","Biochar_EC","Biochar_pH","Biochar_C","Biochar_N","Biochar_Cd","Biochar_Cu","Biochar_Pb","Soil_pH","test_organisms","Biochar_plant_or_not", "Biochar_mix_or_not","Biochar_sludge_or_not", "Biochar_waste_or_not","sand", "silt", "clay","Soil_organic_matter","category")
+Y_cate_train <- SVM_cale$category[index]
+Y_cate_test <- SVM_cale$category[-index]
+X_cate_train <- SVM_cale[index,]
+X_cate_test <- SVM_cale[-index,]
+regr_cate <- randomForest(category~., ntrees = 3000, nodesize = 11, mtry=2,data = X_cate_train, localImp = TRUE)
+predict_cate_x <- predict(regr_cate,X_cate_test)
+predict_cate_train <- predict(regr_cate, X_cate_train)
+result_matrix <- confusionMatrix(table(predict_cate_x, X_cate_test$category))
+train_matrix <- confusionMatrix(table(predict_cate_train, X_cate_train$category))
+train_matrix #Confusion matrix for training set,  binary random forest
+result_matrix #Confusion matrix for test set,  binary random forest
+
+RF_BINARY <- regr_cate
+```
+
+```{r}
+#Binary NN model
+set.seed(32)
+
+#32 
+nn_index <- createDataPartition(SVM_cale$category, p=0.75, list=FALSE)
+nn_train <- SVM_cale[nn_index,]
+nn_test <- SVM_cale[-nn_index,]
+
+ 
+nnet1 <- nnet(category~., nn_train, size = 12, linout = FALSE)
+
+ 
+ypred <- predict(nnet1, nn_test, type = "class") 
+trainpred <- predict(nnet1, nn_train, type = "class")
+
+confusionMatrix(as.factor(ypred), nn_test$category) #Confusion matrix for test set,  binary neural network
+
+confusionMatrix(as.factor(trainpred), nn_train$category) #Confusion matrix for training set, binary neural network
+NN_BINARY <- nnet1
+```
+
+```{r}
+# LINEAR SVM BINARY
+set.seed(2095)
+svm_model2 <- svm(formula = category~.,data = X_cate_train, type = 'C-classification', kernel = 'linear')
+print(svm_model2)
+pred_svm2 <- predict(svm_model2, X_cate_test)
+tr_svm2 <- predict(svm_model2, X_cate_train)
+confusionMatrix(data = pred_svm2, X_cate_test$category) #Confusion matrix for test set,  binary linear SVM
+confusionMatrix(data = tr_svm2, X_cate_train$category) #Confusion matrix for training set,  binary linear SVM
+LINEAR_SVM_BINARY <- svm_model2
+```
+```{r}
+# Gaussian SVM BINARY
+set.seed(2095)
+svm_model2 <- svm(formula = category~.,data = X_cate_train, type = 'C-classification', kernel = 'radial')
+print(svm_model2)
+pred_svm2 <- predict(svm_model2, X_cate_test)
+tr_svm2 <- predict(svm_model2, X_cate_train)
+confusionMatrix(data = pred_svm2, X_cate_test$category) #Confusion matrix for test set, binary gaussian SVM
+confusionMatrix(data = tr_svm2, X_cate_train$category) #Confusion matrix for test set, binary gaussian SVM
+GAUSSIAN_SVM_BINARY <- svm_model2
+```
+
+```{r}
+#quan_rf
+set.seed(2095)
+
+train_rownames2 <- read.csv("train_rownames.csv")
+test_rownames2 <- read.csv("test_rownames.csv")
+
+
+train_rownames <- as.numeric(train_rownames2$train_rownames)
+test_rownames <- as.numeric(test_rownames2$test_rownames)
+
+rf_quan1 <- read.csv("Dataset_biochar_scaled_witheffect.csv")
+rf_quan <- rf_quan1[,-1]
+colnames(rf_quan) <- c("effect","concentration", "growth_or_not","reproduction_or_not", "survival_or_not","temperature","PAHs","Biochar_EC","Biochar_pH","Biochar_C","Biochar_N","Biochar_Cd","Biochar_Cu","Biochar_Pb","Soil_pH","test_organisms","Biochar_plant_or_not", "Biochar_mix_or_not","Biochar_sludge_or_not", "Biochar_waste_or_not","sand", "silt", "clay","Soil_organic_matter")
+index <- createDataPartition(rf_quan$effect, p=0.75, list=FALSE)
+rf_x_train <- rf_quan[ train_rownames, ]
+rf_x_test <- rf_quan[test_rownames, ]
+rf_y_train <- rf_quan$effect[index]
+rf_y_test<-rf_quan$effect[-index]
+regr_rf <- randomForest(effect~., ntrees = 3000, nodesize = 11, mtry=2,data = rf_x_train, localImp = TRUE)
+
+predictions_train <- predict(regr_rf, rf_x_train)
+predictions_test <- predict(regr_rf, rf_x_test)
+
+print(paste0('R2: ' ,caret::postResample(predictions_train, rf_x_train$effect)['Rsquared'] )) #Training set R square
+print(paste0('R2: ' ,caret::postResample(predictions_test, rf_x_test$effect)['Rsquared'] )) #Test set R square
+ 
+train_rmse1 <- sqrt(mean((predictions_train - rf_x_train$effect)^2))
+test_rmse1 <- sqrt(mean((predictions_test - rf_x_test$effect)^2))
+train_rmse1 #Training set root mean square error
+test_rmse1 #Test set root mean square error
+
+QUAN_RF <- regr_rf
+```
+
+```{r}
+#Ternary Linear SVM Model
+three_category <- read.csv("three_category.csv")
+SVM_cale$category <- three_category$rf_three.Category
+SVM_cale$category <- as.factor(SVM_cale$category)
+set.seed(2095)
+svm_index <- createDataPartition(SVM_cale$category, p=0.75, list=FALSE)
+train_svm <- SVM_cale[svm_index,]
+test_svm <- SVM_cale[-svm_index,]
+train_c <- trainControl(method = "cv", number = 100)
+svm_model_three <- caret::train(category~.,data = train_svm, method = "svmLinear", trControl = train_c)
+print(svm_model_three)
+pred_svm <- predict(svm_model_three, test_svm)
+trains_svm <- predict(svm_model_three, train_svm)
+confusionMatrix(data = pred_svm, test_svm$category) #Confusion matrix for test set, ternary linear SVM
+confusionMatrix(data = trains_svm, as.factor(train_svm$category)) #Confusion matrix for training set, ternary linear SVM
+TERNARY_SVM_LINEAR <- svm_model_three
+```
+
+
+
+```{r}
+#Ternary Gaussian SVM Model
+set.seed(2095)
+svm_index <- createDataPartition(SVM_cale$category, p=0.75, list=FALSE)
+train_svm <- SVM_cale[svm_index,]
+test_svm <- SVM_cale[-svm_index,]
+train_c <- trainControl(method = "cv", number = 100)
+svm_model_three <- caret::train(category~.,data = train_svm, method = "svmRadial", trControl = train_c)
+print(svm_model_three)
+pred_svm <- predict(svm_model_three, test_svm)
+trains_svm <- predict(svm_model_three, train_svm)
+confusionMatrix(data = pred_svm, test_svm$category) #Confusion matrix for test set, ternary gaussian SVM
+confusionMatrix(data = trains_svm, as.factor(train_svm$category)) #Confusion matrix for training set, ternary gaussian SVM
+TERNARY_SVM_Gaussian <- svm_model_three
+```
+
+```{r}
+#Ternary RF model
+set.seed(2095)
+
+cccccc1 <- read.csv("Dataset_biochar_colnamed.csv")
+rf_three_use <- cccccc1
+rf_three_use$category <- as.factor(rf_three_use$category)
+
+index <- createDataPartition(rf_three_use$category, p=0.75, list=FALSE)
+Y_cate_train <- rf_three_use$category[index]
+Y_cate_test <- rf_three_use$category[-index]
+X_cate_train <- rf_three_use[index,]
+X_cate_test <- rf_three_use[-index,]
+regr_cate_three <- randomForest(category~., data = X_cate_train, localImp = TRUE)
+
+predict_cate_x <- predict(regr_cate_three,X_cate_test)
+predict_cate_train <- predict(regr_cate_three, X_cate_train)
+result_matrix_three_RF <- confusionMatrix(table(predict_cate_x, X_cate_test$category))
+train_matrix_three_RF <- confusionMatrix(table(predict_cate_train, X_cate_train$category))
+train_matrix_three_RF #Confusion matrix for training set, ternary random forest
+result_matrix_three_RF #Confusion matrix for test set, ternary random forest
+TERNARY_RF <- regr_cate_three
+
+
+```
+
+```{r}
+#Ternary NN model
+set.seed(2095)
+rf_three_use$category <- as.factor(rf_three_use$category)
+index <- createDataPartition(rf_three_use$category, p=0.75, list=FALSE)
+X_cate_train <- rf_three_use[index,]
+X_cate_test <- rf_three_use[-index,]
+regr_cate_three_NN <- nnet(category ~ . , X_cate_train, size = 12,linout = FALSE)
+predict_cate_x <- predict(regr_cate_three_NN,X_cate_test, type = "class")
+predict_cate_train <- predict(regr_cate_three_NN, X_cate_train, type = "class")
+result_matrix_three_NN <- confusionMatrix(table(predict_cate_x, X_cate_test$category))
+train_matrix_three_NN <- confusionMatrix(table(predict_cate_train, X_cate_train$category))
+train_matrix_three_NN #Confusion matrix for training set, ternary neural network
+result_matrix_three_NN #Confusion matrix for test set, ternary neural network
+TERNARY_NN <- regr_cate_three_NN
+rf_scale <- read.csv("Dataset_biochar_original.csv")
+rf_scale$category <- as.factor(rf_scale$category)
+```
+
+```{r}
+#optimized RF
+set.seed(2095)
+index <- createDataPartition(rf_scale$category, p=0.75, list=FALSE)
+rf_here <- rf_scale[,-1]
+
+
+Y_cate_train <- rf_here$category[index]
+Y_cate_test <- rf_here$category[-index]
+X_cate_train <- rf_here[index,]
+X_cate_test <- rf_here[-index,]
+
+
+
+subset_rf <- rf_scale[rf_scale$effect > 10 | rf_scale$effect < -10, ]
+subset_rf <- subset_rf[,-1]
+
+set.seed(2095)
+index <- createDataPartition(subset_rf$category, p=0.75, list=FALSE)
+X_cate_train_sub <- subset_rf[index,]
+X_cate_test_sub <- subset_rf[-index,]
+regr_op_test <- randomForest(category~., data = X_cate_train_sub, localImp = TRUE)
+
+
+
+
+
+predict_cate_x <- predict(regr_op_test,X_cate_test)
+predict_cate_train <- predict(regr_op_test, X_cate_train)
+result_matrix_op_RF <- confusionMatrix(table(predict_cate_x, X_cate_test$category))
+train_matrix_op_RF <- confusionMatrix(table(predict_cate_train, X_cate_train$category))
+train_matrix_op_RF #Confusion matrix for training set, optimized random forest
+result_matrix_op_RF # Confusion matrix for test set, optimized random forest
+OPTIMIZED_RF_BINARY <- regr_op_test
+```
+
+
+```{r}
+#List of final models
+#BINARY MODELS
+# RF_BINARY
+# NN_BINARY
+# LINEAR_SVM_BINARY
+# GAUSSIAN_SVM_BINARY
+#QUANTITATIVE Random forest
+# QUAN_RF
+#TERNARY MODELS
+# TERNARY_SVM_LINEAR
+# TERNARY_SVM_Gaussian
+# TERNARY_RF
+# TERNARY_NN
+#Optimized RF
+# OPTIMIZED_RF_BINARY
+```
+
+
+```{r}
+
+```
+
+
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Cmd+Option+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Cmd+Shift+K* to preview the HTML file). 
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
+
