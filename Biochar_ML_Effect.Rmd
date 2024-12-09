@@ -303,7 +303,7 @@ OPTIMIZED_RF_BINARY <- regr_op_test
 
 
 ```{r}
-plot(cars)
+
 ```
 
 
