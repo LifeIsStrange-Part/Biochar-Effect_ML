@@ -303,11 +303,104 @@ OPTIMIZED_RF_BINARY <- regr_op_test
 
 
 ```{r}
+predictions_train
+rf_x_train$effect
 
+
+predictions_test
+rf_x_test$effect
+tr_residual <- data.frame(predictions_train, rf_x_train$effect)
+te_residual <- data.frame(predictions_test, rf_x_test$effect)
+
+
+tr_residual$residual <- tr_residual$predictions_train - tr_residual$rf_x_train.effect
+tr_residual_filtered <- tr_residual %>%
+  filter(rf_x_train.effect <= 500)
+
+range(te_residual$residual)
+te_residual$residual <- te_residual$predictions_test - te_residual$rf_x_test.effect
+```
+
+```{r}
+ggplot(tr_residual_filtered, aes(x = rf_x_train.effect, y = residual)) +
+  geom_point(color = "darkgreen", shape = 16, size = 1.5) +  # 实心小绿点
+  geom_hline(yintercept = 0, color = "black", size = 0.8) +
+  geom_hline(yintercept = c(50, -50), linetype = "dashed", color = "black", size = 0.8) +
+  scale_x_continuous(limits = c(-100, 400)) +      # X轴范围
+  scale_y_continuous(limits = c(-300, 200)) +      # Y轴范围
+  coord_fixed(ratio = 1) +                         # 坐标比例固定为1:1
+  labs(
+    x = "Measured Effect (%)",
+    y = "Residual (%)",
+    title = "Residual Plot"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    panel.grid = element_blank(),                 # 移除背景网格线
+    panel.border = element_rect(color = "black", fill = NA, size = 0.8),  # 添加边框
+    plot.title = element_text(hjust = 0.5)
+  )
 ```
 
 
-1
+```{r}
+
+
+ggplot(te_residual, aes(x = rf_x_test.effect, y = residual)) +
+  geom_point(color = "darkgreen", shape = 16, size = 1.5) +  # 实心绿色小点
+  geom_hline(yintercept = 0, color = "black", size = 0.8) +
+  geom_hline(yintercept = c(50, -50), linetype = "dashed", color = "black", size = 0.8) +
+  scale_x_continuous(limits = c(-100, 400)) +     # X轴范围
+  scale_y_continuous(limits = c(-300, 200)) +     # Y轴范围
+  coord_fixed(ratio = 1) +                        # 坐标比例固定为1:1
+  labs(
+    x = "Measured Effect (%)",
+    y = "Residual (%)",
+    title = "Residual Plot"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    panel.grid = element_blank(),                 # 移除网格线
+    panel.border = element_rect(color = "black", fill = NA, size = 0.8),  # 添加边框
+    plot.title = element_text(hjust = 0.5)
+  )
+
+
+```
+
+```{r}
+
+# 设置阈值为 ±50
+tr_residual_filtered$within_50 <- abs(tr_residual_filtered$residual) <= 50
+te_residual$within_39 <- abs(te_residual$residual) <= 39
+# 颜色映射：TRUE = 蓝色，FALSE = 红色
+ggplot(te_residual, aes(x = rf_x_test.effect, y = predictions_test)) +
+  geom_point(aes(color = within_39), size = 1.5) +
+  geom_abline(slope = 1, intercept = 0, color = "black", size = 0.8) +               # y = x
+  geom_abline(slope = 1, intercept = 30, linetype = "dashed", color = "black", size = 0.8) +  # y = x + 50
+  geom_abline(slope = 1, intercept = -30, linetype = "dashed", color = "black", size = 0.8) + # y = x - 50
+  scale_color_manual(values = c("TRUE" = "blue", "FALSE" = "red")) +
+  scale_x_continuous(limits = c(-100, 400)) +
+  scale_y_continuous(limits = c(-100, 400)) +
+  coord_fixed(ratio = 1) +
+  labs(x = "Measured Effect (%)", y = "Predicted Effect (%)") +
+  theme_minimal(base_size = 12) +
+  theme(
+    legend.position = "none",                      # 不显示图例
+    panel.grid = element_blank(),                 
+    panel.border = element_rect(color = "black", fill = NA, size = 0.8),
+    plot.title = element_blank()
+  )
+
+sum(tr_residual_filtered$within_50 == TRUE)
+sum(te_residual$within_39 == TRUE)
+```
+```{r}
+tr_residual_save 
+tr_residual_filtered_save 
+te_residual_save 
+```
+
 Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Cmd+Option+I*.
 
 When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Cmd+Shift+K* to preview the HTML file). 
